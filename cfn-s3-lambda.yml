@@ -1,0 +1,83 @@
+AWSTemplateFormatVersion: 2010-09-09
+Resources:
+  LambdaS3AllAccess:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: LambdaS3Access
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: AWSLambdaBasicExecutionRole
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+        - PolicyName: AmazonS3FullAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 's3:*'
+                Resource: !GetAtt 
+                  - S3MediaBucket
+                  - Arn
+  S3MediaBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties: 
+      AccessControl: PublicRead
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+  LambdaFuctionNodejs:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: index.handler
+      FunctionName: MyLambdas3Function
+      Role: !GetAtt 
+        - LambdaS3AllAccess
+        - Arn
+      Code:
+        ZipFile: |
+          exports.handler = function(event, context) {
+              console.log("REQUEST RECEIVED:\n" + JSON.stringify(event))
+              const response = {
+                  statusCode: 200,
+                  body: JSON.stringify('Hello from Lambda!'),
+                };
+                return response;
+          }
+      Runtime: nodejs12.x
+  PublicAllObjectReadPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref S3MediaBucket
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 's3:GetObject'
+            Effect: Allow
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref S3MediaBucket
+                - /*
+            Principal: '*'
+Outputs:
+  WebsiteURL:
+    Value: !GetAtt
+      - S3MediaBucket
+      - WebsiteURL
+    Description: URL for website hosted on S3
